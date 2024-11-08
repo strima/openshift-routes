@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"crypto"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/url"
@@ -567,16 +568,28 @@ func (r *RouteController) populateRoute(ctx context.Context, route *routev1.Rout
 	}
 	key = k
 
-	certificate, err := utilpki.DecodeX509CertificateBytes(secret.Data["tls.crt"])
+	certificates, err := utilpki.DecodeX509CertificateSetBytes(secret.Data["tls.crt"])
 	if err != nil {
 		return err
 	}
-	matches, err := utilpki.PublicKeyMatchesCertificate(key.Public(), certificate)
-	if err != nil {
-		return err
+
+	var caCertificates []*x509.Certificate
+	var certificate *x509.Certificate
+	for _, cert := range certificates {
+		matches, err := utilpki.PublicKeyMatchesCertificate(key.Public(), cert)
+		if err != nil {
+			return err
+		}
+
+		if !matches {
+			caCertificates = append(caCertificates, cert)
+		} else {
+			certificate = cert
+		}
 	}
-	if !matches {
-		return fmt.Errorf("key does not match certificate (route: %s/%s)", route.Namespace, route.Name)
+
+	if certificate == nil {
+		return fmt.Errorf("could not find a certificate which matches the key (route: %s/%s)", route.Namespace, route.Name)
 	}
 
 	if route.Spec.TLS == nil {
@@ -590,11 +603,18 @@ func (r *RouteController) populateRoute(ctx context.Context, route *routev1.Rout
 		return err
 	}
 	route.Spec.TLS.Key = string(encodedKey)
+
 	encodedCert, err := utilpki.EncodeX509(certificate)
 	if err != nil {
 		return err
 	}
 	route.Spec.TLS.Certificate = string(encodedCert)
+
+	encodedCaCerts, err := utilpki.EncodeX509Chain(caCertificates)
+	if err != nil {
+		return err
+	}
+	route.Spec.TLS.CACertificate = string(encodedCaCerts)
 
 	_, err = r.routeClient.RouteV1().Routes(route.Namespace).Update(ctx, route, metav1.UpdateOptions{})
 	return err
