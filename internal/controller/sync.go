@@ -610,11 +610,13 @@ func (r *RouteController) populateRoute(ctx context.Context, route *routev1.Rout
 	}
 	route.Spec.TLS.Certificate = string(encodedCert)
 
-	encodedCaCerts, err := utilpki.EncodeX509Chain(caCertificates)
-	if err != nil {
-		return err
+	if caCertificates != nil && len(caCertificates) > 0 {
+		encodedCaCerts, err := utilpki.EncodeX509Chain(caCertificates)
+		if err != nil {
+			return err
+		}
+		route.Spec.TLS.CACertificate = string(encodedCaCerts)
 	}
-	route.Spec.TLS.CACertificate = string(encodedCaCerts)
 
 	_, err = r.routeClient.RouteV1().Routes(route.Namespace).Update(ctx, route, metav1.UpdateOptions{})
 	return err
