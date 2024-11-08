@@ -575,16 +575,16 @@ func (r *RouteController) populateRoute(ctx context.Context, route *routev1.Rout
 
 	var caCertificates []*x509.Certificate
 	var certificate *x509.Certificate
-	for _, cert := range certificates {
-		matches, err := utilpki.PublicKeyMatchesCertificate(key.Public(), cert)
+	for _, certElement := range certificates {
+		matches, err := utilpki.PublicKeyMatchesCertificate(key.Public(), certElement)
 		if err != nil {
 			return err
 		}
 
 		if !matches {
-			caCertificates = append(caCertificates, cert)
+			caCertificates = append(caCertificates, certElement)
 		} else {
-			certificate = cert
+			certificate = certElement
 		}
 	}
 
